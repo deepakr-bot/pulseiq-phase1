@@ -1,0 +1,224 @@
+metric_id: M01
+metric_name: Headcount
+formula: COUNT(DISTINCT employee_id) with hire_date <= month_end AND (exit_date IS NULL OR exit_date > month_end)
+source_table: fact_headcount_monthly / dim_employee
+grain: Department x month
+owner_team: HR Analytics
+minimum_group_size: 5
+
+metric_id: M02
+metric_name: Hires
+formula: COUNT(employee_id) where hire_date in month
+source_table: fact_headcount_monthly
+grain: Department x month
+owner_team: HR Analytics
+minimum_group_size: 5
+
+metric_id: M03
+metric_name: Exits
+formula: COUNT(employee_id) where exit_date in month
+source_table: fact_headcount_monthly
+grain: Department x month
+owner_team: HR Analytics
+minimum_group_size: 5
+
+metric_id: M04
+metric_name: Attrition rate (monthly)
+formula: Exits / headcount_start x 100
+source_table: fact_headcount_monthly
+grain: Department x month
+owner_team: HR Analytics
+minimum_group_size: 10
+
+metric_id: M05
+metric_name: Attrition rate (rolling 12 months)
+formula: SUM(exits, 12m) / AVG(headcount_end, 12m) x 100
+source_table: fact_headcount_monthly
+grain: Department x month
+owner_team: HR Analytics
+minimum_group_size: 10
+
+metric_id: M06
+metric_name: Voluntary attrition rate
+formula: SUM(voluntary_exits, 12m) / AVG(headcount_end, 12m) x 100
+source_table: fact_headcount_monthly
+grain: Department x month
+owner_team: HR Analytics
+minimum_group_size: 10
+
+metric_id: M07
+metric_name: Gross pay
+formula: SUM(gross_pay)
+source_table: fact_payroll
+grain: Employee x month
+owner_team: Payroll
+minimum_group_size: 5
+
+metric_id: M08
+metric_name: Net pay
+formula: SUM(net_pay)
+source_table: fact_payroll
+grain: Employee x month
+owner_team: Payroll
+minimum_group_size: 5
+
+metric_id: M09
+metric_name: Payroll cost (employer cost)
+formula: SUM(employer_cost)
+source_table: fact_payroll
+grain: Employee x month
+owner_team: Finance
+minimum_group_size: 5
+
+metric_id: M10
+metric_name: Cost per head
+formula: SUM(employer_cost) / COUNT(DISTINCT employee_id)
+source_table: fact_payroll
+grain: Department x month
+owner_team: Finance
+minimum_group_size: 5
+
+metric_id: M11
+metric_name: Overtime share
+formula: SUM(overtime_pay) / SUM(employer_cost) x 100
+source_table: fact_payroll
+grain: Department x month
+owner_team: Payroll
+minimum_group_size: 5
+
+metric_id: M12
+metric_name: Variable pay share
+formula: SUM(variable_pay) / SUM(gross_pay) x 100
+source_table: fact_payroll
+grain: Department x month
+owner_team: Payroll
+minimum_group_size: 5
+
+metric_id: M13
+metric_name: Attendance rate
+formula: (SUM(present_days) + 0.5 x SUM(half_days_unpaid)) / SUM(scheduled_days)
+source_table: fact_attendance_monthly
+grain: Department x month
+owner_team: HR Analytics
+minimum_group_size: 5
+
+metric_id: M14
+metric_name: Late arrival rate
+formula: SUM(late_arrivals) / SUM(present_days)
+source_table: fact_attendance_monthly
+grain: Department x month
+owner_team: HR Analytics
+minimum_group_size: 5
+
+metric_id: M15
+metric_name: Leave without pay days
+formula: SUM(lop_days) in fact_payroll
+source_table: fact_payroll
+grain: Employee x month
+owner_team: Payroll
+minimum_group_size: 5
+
+metric_id: M16
+metric_name: Revenue
+formula: -SUM(signed_amount) for accounts 4001-4004
+source_table: fact_ledger
+grain: Account x month
+owner_team: Finance
+minimum_group_size: nan
+
+metric_id: M17
+metric_name: Net profit
+formula: -SUM(signed_amount) for accounts 4xxx and 5xxx
+source_table: fact_ledger
+grain: Month
+owner_team: Finance
+minimum_group_size: nan
+
+metric_id: M18
+metric_name: Operating margin
+formula: Net profit / Revenue x 100
+source_table: fact_ledger
+grain: Month
+owner_team: Finance
+minimum_group_size: nan
+
+metric_id: M19
+metric_name: Payroll as % of revenue
+formula: Payroll cost / Revenue x 100
+source_table: fact_payroll + fact_ledger
+grain: Month
+owner_team: Finance
+minimum_group_size: nan
+
+metric_id: M20
+metric_name: Days sales outstanding (DSO)
+formula: Closing receivables / revenue incl GST (last 90 days) x 90
+source_table: fact_invoice, fact_ledger
+grain: Month
+owner_team: Finance
+minimum_group_size: nan
+
+metric_id: M21
+metric_name: Overdue receivables
+formula: SUM(balance_due) where due_date < report date and status not DRAFT/CANCELLED
+source_table: fact_invoice
+grain: Client x date
+owner_team: Finance
+minimum_group_size: nan
+
+metric_id: M22
+metric_name: Task completion rate
+formula: COUNT(status = Done) / COUNT(status != Cancelled)
+source_table: fact_task
+grain: Team x sprint
+owner_team: Engineering Ops
+minimum_group_size: 5 tasks
+
+metric_id: M23
+metric_name: On-time delivery rate
+formula: COUNT(completed_on_time = Y) / COUNT(status = Done)
+source_table: fact_task
+grain: Team x sprint
+owner_team: Engineering Ops
+minimum_group_size: 5 tasks
+
+metric_id: M24
+metric_name: Velocity
+formula: SUM(story_points) where status = Done
+source_table: fact_task
+grain: Team x sprint
+owner_team: Engineering Ops
+minimum_group_size: nan
+
+metric_id: M25
+metric_name: Average cycle time
+formula: AVG(completed_date - started_date)
+source_table: fact_task
+grain: Team x sprint
+owner_team: Engineering Ops
+minimum_group_size: 5 tasks
+
+metric_id: M26
+metric_name: Anomaly flag rate
+formula: COUNT(flagged = Y) / COUNT(*)
+source_table: fact_anomaly
+grain: Source x month
+owner_team: AI/ML
+minimum_group_size: nan
+
+metric_id: M27
+metric_name: High-risk share
+formula: COUNT(risk_band = High) / COUNT(*)
+source_table: fact_attrition_risk
+grain: Department
+owner_team: AI/ML
+minimum_group_size: 10
+
+metric_id: M28
+metric_name: Forecast error (MAPE)
+formula: AVG(ABS(actual - forecast) / actual) x 100
+source_table: fact_forecast vs fact_headcount
+grain: Department x month
+owner_team: AI/ML
+minimum_group_size: nan
+

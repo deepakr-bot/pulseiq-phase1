@@ -4,3 +4,5 @@
 - task3_dq: 14 data quality checks (dq/run_dq.py), dq_results table
 - task4_metrics: 28 metric views and a metric catalog
 Run each script from its own task folder, with pulseiq.duckdb in that folder.
+- task5_dashboard: Streamlit workforce dashboard
+To run it: copy pulseiq.duckdb (from task 4) into task5_dashboard, run python create_dashboard_views.py, then streamlit run app.py

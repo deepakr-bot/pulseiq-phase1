@@ -1,0 +1,9 @@
+{
+  "month_col": "month",
+  "dept_col": "department_id",
+  "budget_col": "budget_payroll_cost",
+  "headcount_col": null,
+  "dept_is_id": true,
+  "actual_measure": "employer_cost",
+  "sign_rule": "variance = actual - budget; positive = overspend"
+}

@@ -1,0 +1,13 @@
+Check,Our figure,Expected,Difference,Status
+Employer cost: payroll vs joined table,861586392.42,861586392.42,0,PASS
+Overtime hours: attendance vs joined table,9814,9814,0,PASS
+Exits: headcount vs joined table,304,304,0,PASS
+Employer cost vs reference (198 dept-months),0,0,0,PASS
+Overtime pay vs reference,0,0,0,PASS
+Overtime hours vs reference,0,0,0,PASS
+Headcount end vs reference,0,0,0,PASS
+Exits vs reference,0,0,0,PASS
+Hires vs reference,0,0,0,PASS
+Employees paid vs reference,0,0,0,PASS
+Late arrivals vs reference,0,0,0,PASS
+Attrition rate % vs reference,0,0,0,PASS

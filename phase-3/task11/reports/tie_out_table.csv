@@ -1,0 +1,7 @@
+Check,Our figure,Expected,Difference,Status
+Ledger balanced (debits vs credits),5298123263.57,5298123263.57,0.0,PASS
+Group accounts carry no postings,0.0,0.0,0.0,PASS
+Expense bills vs ledger expense lines,168245930.0,168245930.0,0.0,PASS
+Revenue vs answer key,1260930052.0,1260930052.0,0.0,PASS
+Expenses vs answer key (after DQ-04),1036246464.42,1036246464.42,-0.0,PASS
+Profit vs answer key,224683587.58,224683587.58,0.0,PASS

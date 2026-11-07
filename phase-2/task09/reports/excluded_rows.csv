@@ -1,0 +1,5 @@
+payroll_item_id,month,run_id,department_id,department,reason
+PI-X0002,2025-05,PR-2025-05,D08,Finance & Accounts,second payroll row for the same employee in the month; payroll_item_id does not follow the normal pattern (and the answer key has no such row)
+PI-X0004,2025-12,PR-2025-12,D09,Operations & IT,employee is not in the employee master; payroll_item_id does not follow the normal pattern (and the answer key has no such row)
+PI-X0001,2026-02,PR-2026-02,D02,Product & Design,second payroll row for the same employee in the month; payroll_item_id does not follow the normal pattern (and the answer key has no such row)
+PI-X0003,2026-04,PR-2026-04,D01,Engineering,employee is not in the employee master; payroll_item_id does not follow the normal pattern (and the answer key has no such row)

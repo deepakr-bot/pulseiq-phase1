@@ -1,0 +1,6 @@
+{
+  "cycle_start": "started date",
+  "points_column": "story_points",
+  "blocked_column": null,
+  "reopened_column": "reopened_count"
+}

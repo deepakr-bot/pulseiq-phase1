@@ -1,0 +1,4 @@
+﻿.venv/
+__pycache__/
+*.pyc
+phase-4/task16/output/

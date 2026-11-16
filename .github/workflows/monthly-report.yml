@@ -1,0 +1,30 @@
+name: Monthly report
+
+on:
+  schedule:
+    - cron: "0 6 1 * *"
+  workflow_dispatch:
+    inputs:
+      month:
+        description: "Month to report (YYYY-MM), blank for last month"
+        required: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install packages
+        run: pip install -r phase-4/task16/requirements.txt
+      - name: Build report
+        run: |
+          MONTH="${{ github.event.inputs.month }}"
+          if [ -z "$MONTH" ]; then MONTH=$(date -u -d 'last month' +%Y-%m); fi
+          python phase-4/task16/build_report.py --month "$MONTH"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: monthly-report
+          path: phase-4/task16/output/*.pdf

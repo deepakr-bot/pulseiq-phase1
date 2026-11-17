@@ -1,10 +1,14 @@
+from pathlib import Path
 import duckdb
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-DB = "pulseiq.duckdb"
-KEY_FILE = "reconciliation_answer_key.csv"
+# Define dynamic paths relative to this script's location
+BASE_DIR = Path(__file__).resolve().parent.parent
+DB = str(BASE_DIR / "pulseiq.duckdb")
+KEY_FILE = str(BASE_DIR / "reconciliation_answer_key.csv")
+
 # DQ-04: June 2026 salary expense is 18,450 above the payroll run (known issue)
 ADJ = {"2026-06": 18450.0}
 
@@ -104,7 +108,7 @@ v = exp.merge(ven[["vendor_id", "vendor_name"]], on="vendor_id")
 top = (v.groupby("vendor_name").amount_excl_gst.sum()
        .nlargest(10).sort_values().reset_index())
 st.plotly_chart(px.bar(top, x="amount_excl_gst", y="vendor_name", orientation="h",
-                       title="Top 10 vendors (INR)"))
+                        title="Top 10 vendors (INR)"))
 
 st.subheader("Tie-out checks")
 bill_lines = pl[(pl.source_type == "EXPENSE") & (pl.account_type == "EXPENSE")].amount.sum()

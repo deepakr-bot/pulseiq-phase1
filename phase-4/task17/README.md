@@ -4,7 +4,8 @@ A public dashboard of PulseIQ company and department measures, published as aggr
 
 ## Live link
 
-[Open the live dashboard](https://pulseiq-phase1-rtmpnmed3jckjohxokw3vy.streamlit.app/Live_dashboard)
+
+[Open the live dashboard](https://pulseiq-phase1-ydkftnpf9rqccbct2ht8tc.streamlit.app/Live_dashboard)
 
 Shown on a phone with mobile data:
 - `reports/task17_phone_1.jpeg`

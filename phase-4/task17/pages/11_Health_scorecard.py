@@ -1,10 +1,12 @@
 import os
+from pathlib import Path
 import duckdb
 import pandas as pd
 import streamlit as st
 
-DB = "pulseiq.duckdb"
-FILE = "PulseIQ_Dataset.xlsx"
+BASE_DIR = Path(__file__).resolve().parent.parent
+DB = str(BASE_DIR / "pulseiq.duckdb")
+FILE = BASE_DIR / "PulseIQ_Dataset.xlsx"
 
 # Print setting: one A4 page, no sidebar or menu
 st.markdown("""
@@ -127,7 +129,8 @@ for k, (label, col, unit, higher, tcol, page, source) in enumerate(CARDS):
             st.write(f"Target: {fmt(t, unit) if tcol else 'none in kpi_targets'}")
             st.write(f"Status: {status(v, t, higher)}")
             st.caption(f"Source: {source}")
-            if os.path.exists(page):
+            page_path = BASE_DIR / page
+            if page_path.exists():
                 st.page_link(page, label="Open detail page")
             else:
                 st.caption(f"Detail page: {page}")

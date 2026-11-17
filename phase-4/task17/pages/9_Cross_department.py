@@ -1,135 +1,145 @@
-import os
+from pathlib import Path
+
+import duckdb
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-st.set_page_config(page_title="Cross-department impact", layout="wide")
-FILE = "PulseIQ_Dataset.xlsx"
-REF_FILE = "reference_summary_dept_month.csv"
-PERIOD_START, PERIOD_END = pd.Timestamp("2025-04-01"), pd.Timestamp("2026-09-01")
-MEASURES = ["employer_cost", "overtime_pay", "overtime_hours", "headcount_end", "exits",
-            "hires", "employees_paid", "late_arrivals", "attrition_rate_monthly_pct"]
+HERE = Path(__file__).resolve()
+DB = str(HERE.parents[1] / "pulseiq.duckdb")
+KEY_FILE = str(HERE.parents[1] / "reconciliation_answer_key.csv")
+CUTOFF = pd.Timestamp("2026-09-30")
+OPEN = ["SENT", "OVERDUE", "PARTIALLY_PAID"]
+BANK_ACCOUNT = 1001
+
+
+def table(con, name):
+    """Return the fully qualified name of a table, preferring the main schema."""
+    row = con.execute(
+        "SELECT table_schema FROM information_schema.tables "
+        "WHERE table_name = ? "
+        "ORDER BY CASE WHEN table_schema = 'main' THEN 0 ELSE 1 END LIMIT 1",
+        [name],
+    ).fetchone()
+    if row is None:
+        raise RuntimeError(f"Table {name} is not in the database")
+    return f'"{row[0]}"."{name}"'
+
 
 @st.cache_data
 def load():
-    s = pd.read_excel(FILE, sheet_name=["fact_headcount_monthly", "fact_attendance_monthly",
-                                         "fact_payroll", "dim_department"])
-    return (s["fact_headcount_monthly"], s["fact_attendance_monthly"],
-            s["fact_payroll"], s["dim_department"])
+    con = duckdb.connect(DB, read_only=True)
+    inv = con.execute(f"SELECT * FROM {table(con, 'fact_invoice')}").df()
+    pay = con.execute(f"SELECT * FROM {table(con, 'fact_invoice_payment')}").df()
+    cli = con.execute(
+        f"SELECT client_id, client_name, payment_terms_days FROM {table(con, 'dim_client')}"
+    ).df()
+    ledger = table(con, "fact_ledger")
+    bank = con.execute(
+        f"SELECT entry_date, debit, credit FROM {ledger} WHERE account_code = {BANK_ACCOUNT}"
+    ).df()
+    con.close()
 
-hc, att, pay, dept = load()
+    inv["invoice_date"] = pd.to_datetime(inv["invoice_date"])
+    inv["due_date"] = pd.to_datetime(inv["due_date"])
+    pay["payment_date"] = pd.to_datetime(pay["payment_date"])
+    bank["entry_date"] = pd.to_datetime(bank["entry_date"])
+    key = pd.read_csv(KEY_FILE, parse_dates=["month"]).set_index("month")
+    return inv, pay, cli, bank, key
 
-st.title("Cross-department impact view")
-st.caption("Grain: one row per department and month. Source: PulseIQ_Dataset.xlsx. Amounts in INR.")
 
-# Exclude rows with non-standard IDs (known planted issues)
-pay_bad = pay[~pay.payroll_item_id.str.match(r"^PI-\d{6}$")]
-att_bad = att[~att.attendance_fact_id.str.match(r"^FA-\d{5}$")]
-pay = pay.drop(pay_bad.index)
-att = att.drop(att_bad.index)
+inv, pay, cli, bank, key = load()
 
-st.subheader("Rows excluded (non-standard IDs)")
-st.write(f"Payroll rows excluded: {len(pay_bad)}, employer cost {pay_bad.employer_cost.sum():,.2f}. "
-         f"Attendance rows excluded: {len(att_bad)}.")
-st.dataframe(pay_bad[["payroll_item_id", "employee_id", "department_id", "period_end_date",
-                      "employer_cost"]], hide_index=True)
-st.dataframe(att_bad[["attendance_fact_id", "employee_id", "department_id", "period_end_date",
-                      "late_arrivals"]], hide_index=True)
+st.title("Receivables, ageing and cash")
+st.caption("Source: pulseiq.duckdb. Cutoff 30 Sep 2026. Amounts in INR.")
+st.markdown("**Open invoices** are those with status SENT, OVERDUE or PARTIALLY_PAID. "
+            "PAID, CANCELLED and DRAFT invoices are closed and excluded.")
 
-# 1. Each source at the same grain: department x month
-hc["month"] = pd.to_datetime(hc.month_start_date).dt.to_period("M").dt.to_timestamp()
-hc_m = hc.groupby(["department_id", "month"]).agg(
-    headcount_start=("headcount_start", "sum"),
-    headcount_end=("headcount_end", "sum"),
-    exits=("exits", "sum"),
-    hires=("hires", "sum"),
-    attrition_rate_monthly_pct=("attrition_rate_monthly_pct", "sum"),
-).reset_index()
+# Open invoices, with days past due at the cutoff
+op = inv[inv.status.isin(OPEN) & (inv.balance_due > 0)].merge(cli, on="client_id", how="left").copy()
+op["days_past_due"] = (CUTOFF - op.due_date).dt.days
 
-pay["month"] = pd.to_datetime(pay.period_end_date).dt.to_period("M").dt.to_timestamp()
-pay_m = pay.groupby(["department_id", "month"]).agg(
-    employer_cost=("employer_cost", "sum"),
-    overtime_pay=("overtime_pay", "sum"),
-    employees_paid=("employee_id", "nunique"),
-).reset_index()
 
-att["month"] = pd.to_datetime(att.period_end_date).dt.to_period("M").dt.to_timestamp()
-att["leave_days"] = att.paid_leave_days + att.unpaid_absence_days
-att_m = att.groupby(["department_id", "month"]).agg(
-    overtime_hours=("overtime_hours", "sum"),
-    late_arrivals=("late_arrivals", "sum"),
-    leave_days=("leave_days", "sum"),
-    employee_months=("employee_id", "nunique"),
-).reset_index()
+def bucket(d):
+    if d <= 0:
+        return "Not yet due"
+    if d <= 30:
+        return "1-30 days past due"
+    if d <= 60:
+        return "31-60 days past due"
+    if d <= 90:
+        return "61-90 days past due"
+    return "90+ days past due"
 
-# 2. Join one at a time (outer, so no department-month is dropped)
-combined_all = (hc_m.merge(pay_m, on=["department_id", "month"], how="outer")
-                    .merge(att_m, on=["department_id", "month"], how="outer")
-                    .merge(dept[["department_id", "department_name"]], on="department_id", how="left"))
 
-st.subheader("Join check: totals before and after the join")
+op["bucket"] = op.days_past_due.apply(bucket)
+order = ["Not yet due", "1-30 days past due", "31-60 days past due",
+         "61-90 days past due", "90+ days past due"]
+ageing = op.groupby("bucket").balance_due.sum().reindex(order, fill_value=0).reset_index()
+total_open = op.balance_due.sum()
+
+st.subheader("Receivables ageing")
+c1, c2 = st.columns(2)
+c1.metric("Total open receivables (INR)", f"{total_open:,.0f}")
+c2.metric("Open invoices", f"{len(op)}")
+st.plotly_chart(px.bar(ageing, x="bucket", y="balance_due", title="Open balance by ageing bucket"))
+st.dataframe(ageing, hide_index=True)
+
+
+# Monthly receivables against the answer key
+def closing_ar(end):
+    billed = inv[(inv.invoice_date <= end) & ~inv.status.isin(["CANCELLED", "DRAFT"])].total_amount.sum()
+    paid = pay[pay.payment_date <= end].amount.sum()
+    return billed - paid
+
+
+ar_rows = []
+for m in key.index:
+    end = m + pd.offsets.MonthEnd(0)
+    ar_rows.append((m.strftime("%Y-%m"), closing_ar(end), key.loc[m, "receivables_closing_balance"]))
+ar = pd.DataFrame(ar_rows, columns=["Month", "Our receivables", "Answer key"])
+ar["Difference"] = (ar["Our receivables"] - ar["Answer key"]).round(2)
+
+st.subheader("Month-end receivables vs answer key")
+st.plotly_chart(px.line(ar, x="Month", y=["Our receivables", "Answer key"], markers=True,
+                        title="Closing receivables by month (INR)"))
+st.dataframe(ar.round(0), hide_index=True)
+
+st.subheader("Average days to pay by client (paid invoices)")
+paid = inv[inv.status == "PAID"].merge(cli, on="client_id", how="left")
+dtp = (paid.groupby(["client_name", "payment_terms_days"]).days_to_pay
+       .agg(["mean", "count"]).reset_index())
+dtp["gap"] = dtp["mean"] - dtp["payment_terms_days"]
+dtp = dtp.sort_values("mean", ascending=False).round(1)
+dtp.columns = ["Client", "Terms (days)", "Avg days to pay", "Paid invoices", "Gap vs terms"]
+st.dataframe(dtp, hide_index=True)
+
+st.subheader("Clients with the most overdue money")
+overdue = (op[op.days_past_due > 0].groupby("client_name").balance_due.sum()
+           .sort_values(ascending=False).head(10).reset_index())
+st.plotly_chart(px.bar(overdue, x="balance_due", y="client_name", orientation="h",
+                        title="Overdue balance by client (INR)"))
+
+st.subheader("Cash in and cash out by month")
+bank["month"] = bank.entry_date.dt.to_period("M").dt.to_timestamp()
+cash = bank.groupby("month").agg(cash_in=("debit", "sum"), cash_out=("credit", "sum")).reset_index()
+client_rec = (pay.assign(month=pay.payment_date.dt.to_period("M").dt.to_timestamp())
+              .groupby("month").amount.sum().reset_index(name="client_receipts"))
+cash = cash.merge(client_rec, on="month", how="left").fillna(0)
+st.plotly_chart(px.bar(cash, x="month", y=["cash_in", "cash_out"], barmode="group",
+                        title="Bank cash in and cash out (INR)"))
+st.plotly_chart(px.line(cash, x="month", y=["cash_in", "client_receipts"], markers=True,
+                        title="Bank receipts vs client payments (INR)"))
+
+st.subheader("Tie-out checks")
+bank_closing = (bank.debit - bank.credit).sum()
+sep_key = key.iloc[-1]
 checks = pd.DataFrame([
-    ("Employer cost", pay.employer_cost.sum(), combined_all.employer_cost.sum()),
-    ("Overtime hours", att.overtime_hours.sum(), combined_all.overtime_hours.sum()),
-    ("Exits", hc.exits.sum(), combined_all.exits.sum()),
-], columns=["Check", "Source total", "Joined total"])
-checks["Difference"] = (checks["Source total"] - checks["Joined total"]).round(2)
+    ("Bucket sum = total open receivables", ageing.balance_due.sum(), total_open),
+    ("Open receivables Sep 2026 vs answer key", total_open, sep_key["receivables_closing_balance"]),
+    ("Monthly receivables vs answer key (max abs difference)", ar["Difference"].abs().max(), 0),
+    ("Bank closing balance Sep 2026 vs answer key", bank_closing, sep_key["bank_closing_balance"]),
+], columns=["Check", "Our figure", "Expected"])
+checks["Difference"] = (checks["Our figure"] - checks["Expected"]).round(2)
 checks["Status"] = checks["Difference"].abs().lt(1).map({True: "PASS", False: "FAIL"})
 st.dataframe(checks.round(2), hide_index=True)
-
-combined = combined_all[(combined_all.month >= PERIOD_START) & (combined_all.month <= PERIOD_END)].copy()
-combined["attrition_pct"] = combined.exits / combined.headcount_start * 100
-combined["overtime_hours_per_head"] = combined.overtime_hours / combined.employee_months
-
-# 3. Compare with the reference file
-st.subheader("Comparison with reference (department x month, Apr 2025 to Sep 2026)")
-if not os.path.exists(REF_FILE):
-    st.warning(f"{REF_FILE} not found in this folder.")
-else:
-    ref = pd.read_csv(REF_FILE)
-    ref["month"] = pd.to_datetime(ref.month).dt.to_period("M").dt.to_timestamp()
-    cmp_ = ref[["department_id", "month"] + MEASURES].merge(
-        combined[["department_id", "month"] + MEASURES],
-        on=["department_id", "month"], suffixes=("_ref", "_ours"))
-    st.write(f"Department-months compared: {len(cmp_)}")
-
-    summary, detail = [], []
-    for c in MEASURES:
-        d = (cmp_[c + "_ours"] - cmp_[c + "_ref"]).round(2)
-        summary.append((c, int((d.abs() > 0.5).sum()), round(d.sum(), 2)))
-        bad = cmp_.loc[d.abs() > 0.5, ["department_id", "month"]].copy()
-        if len(bad):
-            bad["measure"] = c
-            bad["ours"] = cmp_.loc[bad.index, c + "_ours"]
-            bad["reference"] = cmp_.loc[bad.index, c + "_ref"]
-            bad["difference"] = d.loc[bad.index]
-            detail.append(bad)
-
-    st.dataframe(pd.DataFrame(summary, columns=["Measure", "Rows that differ",
-                                                "Total difference (ours - reference)"]),
-                 hide_index=True)
-    if detail:
-        st.write("Rows that still differ:")
-        st.dataframe(pd.concat(detail).round(2), hide_index=True)
-    else:
-        st.success("Every measure matches the reference for every department and month.")
-
-# 4. Department comparison
-st.subheader("Department comparison (full period)")
-by_dept = combined.groupby("department_name").agg(
-    employer_cost=("employer_cost", "sum"),
-    overtime_pay=("overtime_pay", "sum"),
-    exits=("exits", "sum"),
-    headcount_start=("headcount_start", "sum"),
-    overtime_hours=("overtime_hours", "sum"),
-    employee_months=("employee_months", "sum"),
-).reset_index()
-by_dept["attrition_pct"] = by_dept.exits / by_dept.headcount_start * 100
-by_dept["overtime_hours_per_head"] = by_dept.overtime_hours / by_dept.employee_months
-by_dept = by_dept.round(2)
-st.dataframe(by_dept, hide_index=True)
-
-st.plotly_chart(px.scatter(
-    by_dept, x="overtime_hours_per_head", y="attrition_pct",
-    size="employer_cost", text="department_name",
-    title="Overtime hours per head vs monthly attrition %, bubble size = employer cost"))

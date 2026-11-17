@@ -1,15 +1,20 @@
+from pathlib import Path
 import duckdb
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
+BASE_DIR = Path(__file__).resolve().parent.parent
+EXCEL_FILE = BASE_DIR / "PulseIQ_Dataset.xlsx"
+DB_FILE = str(BASE_DIR / "pulseiq.duckdb")
+
 LABEL = "AI-generated, for human review"
 
 @st.cache_data
 def load():
-    x = pd.read_excel("PulseIQ_Dataset.xlsx", sheet_name=["fact_anomaly", "fact_forecast"])
-    con = duckdb.connect("pulseiq.duckdb", read_only=True)
+    x = pd.read_excel(EXCEL_FILE, sheet_name=["fact_anomaly", "fact_forecast"])
+    con = duckdb.connect(DB_FILE, read_only=True)
     bt = con.execute("SELECT * FROM m28_forecast_error_mape").df()
     con.close()
     an = x["fact_anomaly"]

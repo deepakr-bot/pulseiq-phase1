@@ -7,7 +7,7 @@ import streamlit as st
 
 HERE = Path(__file__).resolve()
 DB = str(HERE.parents[1] / "pulseiq.duckdb")
-KEY_FILE = HERE.parents[3] / "reconciliation_answer_key.csv"
+KEY_FILE = str(HERE.parents[1] / "reconciliation_answer_key.csv")
 CUTOFF = pd.Timestamp("2026-09-30")
 OPEN = ["SENT", "OVERDUE", "PARTIALLY_PAID"]
 BANK_ACCOUNT = 1001
@@ -118,7 +118,7 @@ st.subheader("Clients with the most overdue money")
 overdue = (op[op.days_past_due > 0].groupby("client_name").balance_due.sum()
            .sort_values(ascending=False).head(10).reset_index())
 st.plotly_chart(px.bar(overdue, x="balance_due", y="client_name", orientation="h",
-                       title="Overdue balance by client (INR)"))
+                        title="Overdue balance by client (INR)"))
 
 st.subheader("Cash in and cash out by month")
 bank["month"] = bank.entry_date.dt.to_period("M").dt.to_timestamp()
@@ -127,7 +127,7 @@ client_rec = (pay.assign(month=pay.payment_date.dt.to_period("M").dt.to_timestam
               .groupby("month").amount.sum().reset_index(name="client_receipts"))
 cash = cash.merge(client_rec, on="month", how="left").fillna(0)
 st.plotly_chart(px.bar(cash, x="month", y=["cash_in", "cash_out"], barmode="group",
-                       title="Bank cash in and cash out (INR)"))
+                        title="Bank cash in and cash out (INR)"))
 st.plotly_chart(px.line(cash, x="month", y=["cash_in", "client_receipts"], markers=True,
                         title="Bank receipts vs client payments (INR)"))
 

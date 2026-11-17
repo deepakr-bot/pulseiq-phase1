@@ -1,5 +1,3 @@
-KPI,department-months,status differs from by-hand,match
-Attendance rate,180,0,YES
-Overtime share,180,0,YES
-Monthly attrition,180,0,YES
-Task completion,180,not rechecked here,check 2 cases by hand
+version https://git-lfs.github.com/spec/v1
+oid sha256:b4e09572c651b4354de9ee2eac03fb22f212f311bfc079e1b464b18627f1e2ce
+size 201

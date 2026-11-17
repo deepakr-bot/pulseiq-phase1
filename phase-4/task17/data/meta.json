@@ -1,0 +1,6 @@
+{
+  "data_cutoff": "2026-09-30",
+  "min_group_size": 5,
+  "company_months": 18,
+  "department_rows": 810
+}

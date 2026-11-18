@@ -134,23 +134,47 @@ def list_metrics():
         "metrics": [{"metric_id": k, "name": v["name"]} for k, v in METRICS.items()],
     }
 
+@app.get("/audit/compliance-report")
+def get_compliance_report():
+    K_THRESHOLD = 5
 
-@app.get("/metrics/{metric_id}")
-def get_metric(metric_id: str):
-    m = METRICS.get(metric_id)
-    if not m:
-        raise HTTPException(status_code=404, detail=f"Unknown metric: {metric_id}")
+    if not DB_PATH.exists():
+        raise HTTPException(status_code=500, detail=f"Database not found at {DB_PATH}")
+
+    # Read freshness before opening the report connection, so only one connection is open at a time
+    refresh_text = freshness_statement()
+    last_refresh = get_last_refresh()
+
+    con = duckdb.connect(str(DB_PATH), read_only=True)
     try:
-        value = fetch_value(m["query"])
+        rows = con.execute(
+            "SELECT department_id, department, avg_employees, min_employees "
+            "FROM dw.v_payroll_dept_size ORDER BY department_id"
+        ).fetchall()
     except duckdb.Error as e:
-        raise HTTPException(status_code=500, detail=f"Query failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Compliance query failed: {e}")
+    finally:
+        con.close()
+
+    shown = []
+    hidden_count = 0
+    for dept_id, dept, avg_emp, min_emp in rows:
+        if avg_emp >= K_THRESHOLD:
+            shown.append({
+                "department_id": dept_id,
+                "department": dept,
+                "avg_employees": avg_emp,
+                "min_employees": min_emp,
+            })
+        else:
+            hidden_count += 1
+
     return {
-        "metric_id": metric_id,
-        "name": m["name"],
-        "value": value,
-        "definition": m["definition"],
-        "source_table": m["source_table"],
-        "lineage": m["lineage"],
-        "last_refresh": get_last_refresh(),
-        "freshness_statement": freshness_statement(),
+        "status": "success",
+        "k_anonymity_threshold": K_THRESHOLD,
+        "shown_departments_count": len(shown),
+        "hidden_departments_count": hidden_count,
+        "freshness_statement": refresh_text,
+        "last_refresh": last_refresh,
+        "departments": shown,
     }

@@ -4,3 +4,6 @@ duckdb
 requests
 python-pptx
 matplotlib
+pandas
+streamlit
+plotly

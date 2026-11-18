@@ -7,7 +7,6 @@ __pycache__/
 /pulseiq.duckdb
 /PulseIQ_Dataset.xlsx
 /reconciliation_answer_key.csv
-/requirements.txt
 phase-4/task17/db.py
 phase-4/task17/db.cpython-314.pyc
 phase-4/task17/pulseiq.duckdb

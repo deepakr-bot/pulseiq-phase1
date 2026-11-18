@@ -29,3 +29,7 @@ pip install -r requirements.txt
 
 2.Run the Streamlit application:
 streamlit run phase-4/task18/app.py
+
+### Phone test (live dashboard)
+
+![Live dashboard on phone](docs/screenshots/phone-live-dashboard.jpeg)

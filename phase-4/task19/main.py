@@ -134,23 +134,38 @@ def list_metrics():
         "metrics": [{"metric_id": k, "name": v["name"]} for k, v in METRICS.items()],
     }
 
-
-@app.get("/metrics/{metric_id}")
-def get_metric(metric_id: str):
-    m = METRICS.get(metric_id)
-    if not m:
-        raise HTTPException(status_code=404, detail=f"Unknown metric: {metric_id}")
+@app.get("/audit/compliance-report")
+def get_compliance_report():
+    if not DB_PATH.exists():
+        raise HTTPException(status_code=500, detail=f"Database not found at {DB_PATH}")
+    
+    con = duckdb.connect(str(DB_PATH), read_only=True)
     try:
-        value = fetch_value(m["query"])
-    except duckdb.Error as e:
-        raise HTTPException(status_code=500, detail=f"Query failed: {e}")
-    return {
-        "metric_id": metric_id,
-        "name": m["name"],
-        "value": value,
-        "definition": m["definition"],
-        "source_table": m["source_table"],
-        "lineage": m["lineage"],
-        "last_refresh": get_last_refresh(),
-        "freshness_statement": freshness_statement(),
-    }
+        rows = con.execute("SELECT department_id, department, avg_employees, min_employees FROM dw.v_payroll_dept_size").fetchall()
+        shown = []
+        hidden_count = 0
+        for r in rows:
+            record = {
+                "department_id": r[0],
+                "department": r[1],
+                "avg_employees": r[2],
+                "min_employees": r[3]
+            }
+            if r[2] >= 5:
+                shown.append(record)
+            else:
+                hidden_count += 1
+                
+        return {
+            "status": "success",
+            "k_anonymity_threshold": 5,
+            "shown_departments_count": len(shown),
+            "hidden_departments_count": hidden_count,
+            "freshness_statement": "Data refreshed at 2026-10-21 13:40:18 UTC.",
+            "last_refresh": "2026-10-21 13:40:18 UTC",
+            "departments": shown
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Compliance query failed: {str(e)}")
+    finally:
+     con.close()

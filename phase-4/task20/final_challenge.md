@@ -4,7 +4,7 @@
 
 I built a read-only REST API endpoint that reports departmental k-anonymity compliance (k = 5) for payroll data. It reads department headcounts from the PulseIQ DuckDB warehouse, excludes any department with an average headcount below 5, and returns the results with structured metadata for audit review.
 
-* **Branch and commit:** `feature/audit-compliance-endpoint` (`[PASTE HASH]`)
+* **Branch and commit:** `feature/audit-compliance-endpoint` (`[7a30534]`)
 * **Route:** `GET /audit/compliance-report`
 * **File and function:** `phase-4/task19/main.py`, `get_compliance_report()`
 * **What it returns:** `status`, `k_anonymity_threshold` (5), `shown_departments_count`, `hidden_departments_count`, `freshness_statement`, `last_refresh`, and a `departments` list. Each department entry includes its ID, name, average headcount and minimum headcount.

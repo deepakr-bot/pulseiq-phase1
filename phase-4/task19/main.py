@@ -136,36 +136,45 @@ def list_metrics():
 
 @app.get("/audit/compliance-report")
 def get_compliance_report():
+    K_THRESHOLD = 5
+
     if not DB_PATH.exists():
         raise HTTPException(status_code=500, detail=f"Database not found at {DB_PATH}")
-    
+
+    # Read freshness before opening the report connection, so only one connection is open at a time
+    refresh_text = freshness_statement()
+    last_refresh = get_last_refresh()
+
     con = duckdb.connect(str(DB_PATH), read_only=True)
     try:
-        rows = con.execute("SELECT department_id, department, avg_employees, min_employees FROM dw.v_payroll_dept_size").fetchall()
-        shown = []
-        hidden_count = 0
-        for r in rows:
-            record = {
-                "department_id": r[0],
-                "department": r[1],
-                "avg_employees": r[2],
-                "min_employees": r[3]
-            }
-            if r[2] >= 5:
-                shown.append(record)
-            else:
-                hidden_count += 1
-                
-        return {
-            "status": "success",
-            "k_anonymity_threshold": 5,
-            "shown_departments_count": len(shown),
-            "hidden_departments_count": hidden_count,
-            "freshness_statement": "Data refreshed at 2026-10-21 13:40:18 UTC.",
-            "last_refresh": "2026-10-21 13:40:18 UTC",
-            "departments": shown
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Compliance query failed: {str(e)}")
+        rows = con.execute(
+            "SELECT department_id, department, avg_employees, min_employees "
+            "FROM dw.v_payroll_dept_size ORDER BY department_id"
+        ).fetchall()
+    except duckdb.Error as e:
+        raise HTTPException(status_code=500, detail=f"Compliance query failed: {e}")
     finally:
-     con.close()
+        con.close()
+
+    shown = []
+    hidden_count = 0
+    for dept_id, dept, avg_emp, min_emp in rows:
+        if avg_emp >= K_THRESHOLD:
+            shown.append({
+                "department_id": dept_id,
+                "department": dept,
+                "avg_employees": avg_emp,
+                "min_employees": min_emp,
+            })
+        else:
+            hidden_count += 1
+
+    return {
+        "status": "success",
+        "k_anonymity_threshold": K_THRESHOLD,
+        "shown_departments_count": len(shown),
+        "hidden_departments_count": hidden_count,
+        "freshness_statement": refresh_text,
+        "last_refresh": last_refresh,
+        "departments": shown,
+    }

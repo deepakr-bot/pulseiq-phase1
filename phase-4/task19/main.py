@@ -1,4 +1,3 @@
-# main.py
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -57,8 +56,8 @@ METRICS = {
             "-> v_payroll_company_month -> Metrics API -> Executive Dashboard"
         ),
         "query": (
-    "SELECT ROUND(employer_cost, 2) FROM dw.v_payroll_company_month "
-    "ORDER BY month_end DESC LIMIT 1"
+            "SELECT ROUND(employer_cost, 2) FROM dw.v_payroll_company_month "
+            "ORDER BY month_end DESC LIMIT 1"
         ),
     },
     "attrition_12m": {
@@ -133,6 +132,28 @@ def list_metrics():
         "freshness_statement": freshness_statement(),
         "metrics": [{"metric_id": k, "name": v["name"]} for k, v in METRICS.items()],
     }
+
+
+@app.get("/metrics/{metric_id}")
+def get_metric(metric_id: str):
+    m = METRICS.get(metric_id)
+    if not m:
+        raise HTTPException(status_code=404, detail=f"Unknown metric: {metric_id}")
+    try:
+        value = fetch_value(m["query"])
+    except duckdb.Error as e:
+        raise HTTPException(status_code=500, detail=f"Query failed: {e}")
+    return {
+        "metric_id": metric_id,
+        "name": m["name"],
+        "value": value,
+        "definition": m["definition"],
+        "source_table": m["source_table"],
+        "lineage": m["lineage"],
+        "last_refresh": get_last_refresh(),
+        "freshness_statement": freshness_statement(),
+    }
+
 
 @app.get("/audit/compliance-report")
 def get_compliance_report():
